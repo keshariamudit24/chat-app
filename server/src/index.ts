@@ -1,24 +1,30 @@
-import { WebSocketServer } from "ws";
+import { WebSocketServer, WebSocket } from "ws";
 
 const wss = new WebSocketServer({ port: 8080 })
 
+interface User {
+    socket: WebSocket;
+    room: string
+}
+
 let userCount = 0;
-let allSockets = [];
+let allSockets: User[] = [];
 
 wss.on("connection", (socket) => {
-
-    console.log("websocket server connected")
-    userCount = userCount + 1;
-    allSockets.push(socket)
-
     // whenever server gets a msg from client 
     socket.on("message", (msg) => {
-        console.log("msg recieved : ", msg.toString());
-        // broadcast it to other sockets 
-        for(let i = 0; i < allSockets.length; i++){
-            let s = allSockets[i];
-            // sending msg to "s" socket from the server 
-            s.send("sending msg from server " +  msg.toString())
+        //@ts-ignore
+        const parsedMsg = JSON.parse(msg)
+
+        // join a room - details given as payload
+        if(parsedMsg.type === "join"){
+            allSockets.push({
+                socket,
+                room: parsedMsg.payload.roomId
+            })
         }
+
+
+        // chat functionality 
     })
 })
