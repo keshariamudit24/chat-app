@@ -24,7 +24,22 @@ wss.on("connection", (socket) => {
             })
         }
 
-
         // chat functionality 
+        if(parsedMsg.type === "chat"){
+
+            let currUserRoom = null
+            for(let i = 0; i < allSockets.length; i++){
+                if(allSockets[i].socket === socket){
+                    currUserRoom = allSockets[i].room;
+                    break;
+                }
+            }
+
+            for(let i = 0; i < allSockets.length; i++){
+                if(allSockets[i].room === currUserRoom){
+                    allSockets[i].socket.send(parsedMsg.paylload.msg)
+                }
+            }
+        }
     })
 })
