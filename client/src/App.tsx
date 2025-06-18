@@ -3,10 +3,15 @@ import './App.css'
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
+interface Message {
+  text: string;
+  isOutgoing: boolean;
+}
+
 function App() {
   const [roomId, setRoomId] = useState<string>('');
   const [isInRoom, setIsInRoom] = useState(false);
-  const [messages, setMessages] = useState<string[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const wsRef = useRef();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -53,6 +58,12 @@ function App() {
 
     if (inputMessage.trim()) {
 
+      // Add message to local state immediately
+      setMessages(prev => [...prev, {
+        text: inputMessage,
+        isOutgoing: true
+      }]);
+
       //@ts-ignore
       const ws: WebSocket = wsRef.current;
 
@@ -70,7 +81,6 @@ function App() {
         };
       }
 
-      // setMessages(prev => [...prev, inputMessage]);
       setInputMessage('');
     }
   };
@@ -104,7 +114,12 @@ function App() {
 
       console.log(data)
 
-      setMessages(m => [...m, data.payload.message])
+      if (data.type === 'chat') {
+        setMessages(prev => [...prev, {
+          text: data.payload.message,
+          isOutgoing: false // incoming message
+        }]);
+      }
     }
 
     // @ts-ignore
@@ -148,11 +163,16 @@ function App() {
             <h2 className="text-xl">Room ID: {roomId}</h2>
           </div>
           <div className="h-[500px] p-4 overflow-y-auto space-y-4">
-            {messages.map((msg, idx) => (
-              <div key={idx} className="bg-gray-700 p-3 rounded-lg">
-                {msg}
-              </div>
-            ))}
+            <div className="messages">
+              {messages.map((msg, index) => (
+                <div 
+                  key={index} 
+                  className={`message ${msg.isOutgoing ? 'outgoing' : 'incoming'}`}
+                >
+                  {msg.text}
+                </div>
+              ))}
+            </div>
             <div ref={messagesEndRef} />
           </div>
           <div className="p-4 bg-gray-700 flex gap-2">

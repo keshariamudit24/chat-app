@@ -70,9 +70,9 @@ wss.on("connection", (socket) => {
                     throw new Error("User not in any room");
                 }
 
-                // sending the message to everyone present in that room 
+                // sending the message to everyone present in that room EXCEPT the sender
                 for(let i = 0; i < allSockets.length; i++){
-                    if(allSockets[i].room === currUserRoom){
+                    if(allSockets[i].room === currUserRoom && allSockets[i].socket !== socket){
                         allSockets[i].socket.send(JSON.stringify({
                             type: "chat",
                             payload: { message: parsedMsg.payload.msg }
