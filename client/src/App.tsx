@@ -17,7 +17,10 @@ function App() {
   const [roomId, setRoomId] = useState(() => {
     return localStorage.getItem('chatRoom') || '';
   });
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const saved = localStorage.getItem('chatMessages');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [inputMessage, setInputMessage] = useState('');
   const ws = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -43,7 +46,7 @@ function App() {
   const generateRoom = () => {
     const newRoomId = Math.random().toString(36).substring(2, 9);
     setRoomId(newRoomId);
-    localStorage.setItem('chatRoom', newRoomId); // ✅ Add this line
+    localStorage.setItem('chatRoom', newRoomId); 
     setIsJoined(true);
     sendJoinMessage(newRoomId);
   };
@@ -51,7 +54,7 @@ function App() {
   const joinRoom = () => {
     if (roomId.trim()) {
       setIsJoined(true);
-      localStorage.setItem('chatRoom', roomId); // ✅ Add this line
+      localStorage.setItem('chatRoom', roomId); 
       sendJoinMessage(roomId);
     }
   };
@@ -96,17 +99,18 @@ function App() {
   };
 
   useEffect(() => {
+    // Save to localStorage on every update
+    localStorage.setItem('chatMessages', JSON.stringify(messages));
     scrollToBottom();
   }, [messages]);
 
   const handleLeaveRoom = () => {
     if (ws.current) {
-      ws.current.send(JSON.stringify({
-        type: "leave"
-      }));
+      ws.current.send(JSON.stringify({ type: "leave" }));
       setIsJoined(false);
       setMessages([]);
       localStorage.removeItem('chatRoom');
+      localStorage.removeItem('chatMessages'); 
     }
   };
 
