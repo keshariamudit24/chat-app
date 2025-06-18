@@ -6,18 +6,40 @@ function App() {
   const [isInRoom, setIsInRoom] = useState(false);
   const [messages, setMessages] = useState<string[]>([]);
   const [inputMessage, setInputMessage] = useState('');
+  const wsRef = useRef();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const sendJoinMessage = (roomId: string) => {
+  //@ts-ignore
+  const ws: WebSocket = wsRef.current;
+
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: "join",
+      payload: { roomId }
+    }));
+  } else {
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        type: "join",
+        payload: { roomId }
+      }));
+    };
+  }
+};
+
   const generateRoom = () => {
-    const newRoomId = Math.random().toString(36).substring(2, 9);
-    setRoomId(newRoomId);
-    setIsInRoom(true);
+   const newRoomId = Math.random().toString(36).substring(2, 9);
+   setRoomId(newRoomId);
+   setIsInRoom(true);  
+   sendJoinMessage(newRoomId);
   };
 
   const joinRoom = () => {
     if (roomId.trim()) {
       setIsInRoom(true);
     }
+    sendJoinMessage(roomId);
   };
 
   const sendMessage = () => {
@@ -34,6 +56,20 @@ function App() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    // create new websocket connection
+    const ws = new WebSocket("ws://localhost:8080")
+
+    // when recieved msg from the server, add it to the messages list 
+    ws.onmessage = (event) => {
+      setMessages(m => [...m, event.data])
+    }
+
+    // @ts-ignore
+    wsRef.current = ws;
+
+  }, [])
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 flex items-center justify-center">
