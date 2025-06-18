@@ -46,8 +46,31 @@ function App() {
 
   const sendMessage = () => {
 
+    if (!isInRoom) {
+      toast.error("You must join a room before sending messages");
+      return;
+    }
+
     if (inputMessage.trim()) {
-      setMessages(prev => [...prev, inputMessage]);
+
+      //@ts-ignore
+      const ws: WebSocket = wsRef.current;
+
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: "chat",
+          payload: { msg: inputMessage }
+        }));
+      } else {
+        ws.onopen = () => {
+          ws.send(JSON.stringify({
+            type: "chat",
+            payload: { msg: inputMessage }
+          }));
+        };
+      }
+
+      // setMessages(prev => [...prev, inputMessage]);
       setInputMessage('');
     }
   };
@@ -79,7 +102,9 @@ function App() {
         return;
       }
 
-      setMessages(m => [...m, event.data])
+      console.log(data)
+
+      setMessages(m => [...m, data.payload.message])
     }
 
     // @ts-ignore

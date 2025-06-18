@@ -75,16 +75,16 @@ wss.on("connection", (socket) => {
                     if(allSockets[i].room === currUserRoom){
                         allSockets[i].socket.send(JSON.stringify({
                             type: "chat",
-                            payload: { message: parsedMsg.payload.message }
+                            payload: { message: parsedMsg.payload.msg }
                         }));
                     }
                 }
 
             }
-        } catch (error) {
+        } catch (error: any) {
             socket.send(JSON.stringify({
                 type: "error",
-                payload: { message: "Invalid message format" }
+                payload: { message: error.message || "Invalid message format" }
             }));
         }
     });
@@ -108,3 +108,17 @@ wss.on("connection", (socket) => {
         }
     });
 });
+
+// {
+//     "type": "join",
+//     "payload": {
+//         "roomId": "123"
+//     }
+// }
+
+// {
+//     "type": "chat",
+//     "payload": {
+//         "msg": "hi there"
+//     }
+// }
