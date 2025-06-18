@@ -27,6 +27,7 @@ wss.on("connection", (socket) => {
         // chat functionality 
         if(parsedMsg.type === "chat"){
 
+            // finding the room id of the sender (will be present coz already joined the room)
             let currUserRoom = null
             for(let i = 0; i < allSockets.length; i++){
                 if(allSockets[i].socket === socket){
@@ -35,6 +36,7 @@ wss.on("connection", (socket) => {
                 }
             }
 
+            // sending the mesage to everyone present in that room 
             for(let i = 0; i < allSockets.length; i++){
                 if(allSockets[i].room === currUserRoom){
                     allSockets[i].socket.send(parsedMsg.paylload.msg)
