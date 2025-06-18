@@ -35,7 +35,7 @@ wss.on("connection", (socket) => {
                     socket.send(JSON.stringify({
                         type: "system",
                         messageType: "error",
-                        payload: { message: "Room is full" }
+                        payload: { message: "Room is full", action: "ROOM_FULL" }
                     }));
                     return; // Don't increment counter or add to allSockets
                 }
@@ -54,6 +54,30 @@ wss.on("connection", (socket) => {
                 }));
             }
 
+            if(parsedMsg.type === "leave") {
+                const user = allSockets.find(u => u.socket === socket);
+                if (user) {
+                    // Notify others in the room that this user left
+                    allSockets.forEach(u => {
+                        if (u.room === user.room && u.socket !== socket) {
+                            u.socket.send(JSON.stringify({
+                                type: "system",
+                                messageType: "info",
+                                payload: { message: "Other user left the room", action: "ROOM_CLOSED" }
+                            }));
+                        }
+                    });
+
+                    // Clean up room
+                    roomFreq[user.room] -= 1;
+                    if (roomFreq[user.room] <= 0) {
+                        delete roomFreq[user.room];
+                    }
+                    allSockets = allSockets.filter(u => u.socket !== socket);
+                }
+                return;
+            }
+
             // chat functionality 
             if(parsedMsg.type === "chat"){
 
@@ -67,7 +91,12 @@ wss.on("connection", (socket) => {
                 }
                 
                 if (!currUserRoom) {
-                    throw new Error("User not in any room");
+                    socket.send(JSON.stringify({
+                        type: "system",
+                        messageType: "error",
+                        payload: { message: "You're not in a room", action: "NOT_IN_ROOM" }
+                    }));
+                    return;
                 }
 
                 // sending the message to everyone present in that room EXCEPT the sender
@@ -75,7 +104,10 @@ wss.on("connection", (socket) => {
                     if(allSockets[i].room === currUserRoom && allSockets[i].socket !== socket){
                         allSockets[i].socket.send(JSON.stringify({
                             type: "chat",
-                            payload: { message: parsedMsg.payload.msg }
+                            payload: { 
+                                message: parsedMsg.payload.msg,
+                                isOutgoing: false  // This indicates it's an incoming message
+                            }
                         }));
                     }
                 }

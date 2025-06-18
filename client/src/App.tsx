@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -9,49 +9,56 @@ interface Message {
 }
 
 function App() {
-  const [roomId, setRoomId] = useState<string>('');
-  const [isInRoom, setIsInRoom] = useState(false);
+  const [isJoined, setIsJoined] = useState(() => {
+    // Initialize from localStorage if exists
+    const saved = localStorage.getItem('chatRoom');
+    return saved ? true : false;
+  });
+  const [roomId, setRoomId] = useState(() => {
+    return localStorage.getItem('chatRoom') || '';
+  });
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
-  const wsRef = useRef();
+  const ws = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const sendJoinMessage = (roomId: string) => {
-    //@ts-ignore
-    const ws: WebSocket = wsRef.current;
-
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: "join",
-        payload: { roomId }
-      }));
-    } else {
-      ws.onopen = () => {
-        ws.send(JSON.stringify({
+    if (ws.current) {
+      if (ws.current.readyState === WebSocket.OPEN) {
+        ws.current.send(JSON.stringify({
           type: "join",
           payload: { roomId }
         }));
-      };
+      } else {
+        ws.current.onopen = () => {
+          ws.current?.send(JSON.stringify({
+            type: "join",
+            payload: { roomId }
+          }));
+        };
+      }
     }
   };
 
   const generateRoom = () => {
-   const newRoomId = Math.random().toString(36).substring(2, 9);
-   setRoomId(newRoomId);
-   setIsInRoom(true);  
-   sendJoinMessage(newRoomId);
+    const newRoomId = Math.random().toString(36).substring(2, 9);
+    setRoomId(newRoomId);
+    localStorage.setItem('chatRoom', newRoomId); // ✅ Add this line
+    setIsJoined(true);
+    sendJoinMessage(newRoomId);
   };
 
   const joinRoom = () => {
     if (roomId.trim()) {
-      setIsInRoom(true);
+      setIsJoined(true);
+      localStorage.setItem('chatRoom', roomId); // ✅ Add this line
+      sendJoinMessage(roomId);
     }
-    sendJoinMessage(roomId);
   };
 
   const sendMessage = () => {
 
-    if (!isInRoom) {
+    if (!isJoined) {
       toast.error("You must join a room before sending messages");
       return;
     }
@@ -64,21 +71,20 @@ function App() {
         isOutgoing: true
       }]);
 
-      //@ts-ignore
-      const ws: WebSocket = wsRef.current;
-
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: "chat",
-          payload: { msg: inputMessage }
-        }));
-      } else {
-        ws.onopen = () => {
-          ws.send(JSON.stringify({
+      if (ws.current) {
+        if (ws.current.readyState === WebSocket.OPEN) {
+          ws.current.send(JSON.stringify({
             type: "chat",
             payload: { msg: inputMessage }
           }));
-        };
+        } else {
+          ws.current.onopen = () => {
+            ws.current?.send(JSON.stringify({
+              type: "chat",
+              payload: { msg: inputMessage }
+            }));
+          };
+        }
       }
 
       setInputMessage('');
@@ -93,44 +99,108 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
-  useEffect(() => {
-    // create new websocket connection
-    const ws = new WebSocket("ws://localhost:8080")
-
-    // when recieved msg from the server, add it to the messages list 
-    ws.onmessage = (event) => {
-
-      console.log("Message from server:", event.data); // Add this line
-      const data = JSON.parse(event.data);
-      
-      if (data.type === 'system') {
-        if (data.messageType === 'success') {
-          toast.success(data.payload.message);
-        } else if (data.messageType === 'error') {
-          toast.error(data.payload.message);
-        }
-        return;
-      }
-
-      console.log(data)
-
-      if (data.type === 'chat') {
-        setMessages(prev => [...prev, {
-          text: data.payload.message,
-          isOutgoing: false // incoming message
-        }]);
-      }
+  const handleLeaveRoom = () => {
+    if (ws.current) {
+      ws.current.send(JSON.stringify({
+        type: "leave"
+      }));
+      setIsJoined(false);
+      setMessages([]);
+      localStorage.removeItem('chatRoom');
     }
+  };
 
-    // @ts-ignore
-    wsRef.current = ws;
+  useEffect(() => {
+    window.history.pushState(null, '', window.location.pathname);
+    const handlePopState = () => {
+      if (isJoined) {
+        handleLeaveRoom(); // OK here since it's a back action
+        window.history.pushState(null, '', window.location.pathname);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
 
-  }, [])
+    window.addEventListener('beforeunload', (e) => {
+      if (isJoined) {
+        // Don't remove chatRoom on reload/close
+        ws.current?.close(); // just close the socket
+      }
+    });
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isJoined]);
+
+  useEffect(() => {
+    const connectWebSocket = () => {
+      ws.current = new WebSocket('ws://localhost:8080');
+
+      ws.current.onopen = () => {
+        // If we were in a room before reload, rejoin it
+        const savedRoom = localStorage.getItem('chatRoom');
+        if (savedRoom) {
+          ws.current?.send(JSON.stringify({
+            type: 'join',
+            payload: { roomId: savedRoom }
+          }));
+        }
+      };
+
+      ws.current.onmessage = (event) => {
+        console.log("Message from server:", event.data); // Add this line
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'system') {
+          if (data.messageType === 'success') {
+            toast.success(data.payload.message);
+            setIsJoined(true);
+          } else if (data.messageType === 'error') {
+            toast.error(data.payload.message);
+            if (data.payload.action === 'ROOM_FULL') {
+              setIsJoined(false);
+              localStorage.removeItem('chatRoom');
+            }
+          } else if (data.messageType === 'info') {
+            toast.info(data.payload.message);
+            if (data.payload.action === 'ROOM_CLOSED') {
+              setIsJoined(false);
+              setMessages([]);
+              localStorage.removeItem('chatRoom');
+            }
+          }
+          return;
+        }
+
+        console.log(data)
+
+        if (data.type === 'chat') {
+          setMessages(prev => [...prev, {
+            text: data.payload.message,
+            isOutgoing: false // incoming message
+          }]);
+        }
+      };
+
+      ws.current.onclose = () => {
+        // Only try to reconnect if we're supposed to be in a room
+        if (localStorage.getItem('chatRoom')) {
+          setTimeout(connectWebSocket, 1000);
+        }
+      };
+    };
+
+    connectWebSocket();
+
+    return () => {
+      ws.current?.close(); // just close socket
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 flex items-center justify-center">
       <ToastContainer position="top-right" />
-      {!isInRoom ? (
+      {!isJoined ? (
         <div className="w-full max-w-md bg-gray-800 p-8 rounded-lg shadow-lg">
           <h1 className="text-2xl font-bold mb-8 text-center">Welcome to Chat Room</h1>
           <div className="space-y-4">
@@ -159,8 +229,14 @@ function App() {
         </div>
       ) : (
         <div className="max-w-3xl w-full mx-auto bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-          <div className="p-4 bg-gray-700">
+          <div className="p-4 bg-gray-700 flex justify-between items-center">
             <h2 className="text-xl">Room ID: {roomId}</h2>
+            <button
+              onClick={handleLeaveRoom}
+              className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-colors"
+            >
+              Leave
+            </button>
           </div>
           <div className="h-[500px] p-4 overflow-y-auto space-y-4">
             <div className="messages">
