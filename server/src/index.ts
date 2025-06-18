@@ -30,26 +30,27 @@ wss.on("connection", (socket) => {
                     roomFreq[parsedMsg.payload.roomId] = 0;
                 }
 
+                // Check room capacity before incrementing and adding user
+                if(roomFreq[parsedMsg.payload.roomId] >= 2){
+                    socket.send(JSON.stringify({
+                        type: "system",
+                        messageType: "error",
+                        payload: { message: "Room is full" }
+                    }));
+                    return; // Don't increment counter or add to allSockets
+                }
+
                 roomFreq[parsedMsg.payload.roomId] += 1;
                 console.log(`User connected. Total users: ${roomFreq[parsedMsg.payload.roomId]}`);
                 
-                // only two people can chat 
-                if(roomFreq[parsedMsg.payload.roomId] > 2){
-                    socket.send(JSON.stringify({
-                        type: "error",
-                        payload: { message: "Room is full" }
-                    }));
-                    socket.close();
-                    return;
-                }
-
                 allSockets.push({
                     socket,
                     room: parsedMsg.payload.roomId
                 });
                 socket.send(JSON.stringify({
-                    type: "joined",
-                    payload: { roomId: parsedMsg.payload.roomId }
+                    type: "system",
+                    messageType: "success",
+                    payload: { message: "Successfully joined the room" }
                 }));
             }
 
@@ -69,10 +70,13 @@ wss.on("connection", (socket) => {
                     throw new Error("User not in any room");
                 }
 
-                // sending the mesage to everyone present in that room 
+                // sending the message to everyone present in that room 
                 for(let i = 0; i < allSockets.length; i++){
                     if(allSockets[i].room === currUserRoom){
-                        allSockets[i].socket.send(parsedMsg.payload.message)
+                        allSockets[i].socket.send(JSON.stringify({
+                            type: "chat",
+                            payload: { message: parsedMsg.payload.message }
+                        }));
                     }
                 }
 

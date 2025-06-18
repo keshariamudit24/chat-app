@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import './App.css'
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function App() {
   const [roomId, setRoomId] = useState<string>('');
@@ -10,23 +12,23 @@ function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const sendJoinMessage = (roomId: string) => {
-  //@ts-ignore
-  const ws: WebSocket = wsRef.current;
+    //@ts-ignore
+    const ws: WebSocket = wsRef.current;
 
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({
-      type: "join",
-      payload: { roomId }
-    }));
-  } else {
-    ws.onopen = () => {
+    if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
         type: "join",
         payload: { roomId }
       }));
-    };
-  }
-};
+    } else {
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          type: "join",
+          payload: { roomId }
+        }));
+      };
+    }
+  };
 
   const generateRoom = () => {
    const newRoomId = Math.random().toString(36).substring(2, 9);
@@ -43,6 +45,7 @@ function App() {
   };
 
   const sendMessage = () => {
+
     if (inputMessage.trim()) {
       setMessages(prev => [...prev, inputMessage]);
       setInputMessage('');
@@ -63,6 +66,19 @@ function App() {
 
     // when recieved msg from the server, add it to the messages list 
     ws.onmessage = (event) => {
+
+      console.log("Message from server:", event.data); // Add this line
+      const data = JSON.parse(event.data);
+      
+      if (data.type === 'system') {
+        if (data.messageType === 'success') {
+          toast.success(data.payload.message);
+        } else if (data.messageType === 'error') {
+          toast.error(data.payload.message);
+        }
+        return;
+      }
+
       setMessages(m => [...m, event.data])
     }
 
@@ -73,6 +89,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 flex items-center justify-center">
+      <ToastContainer position="top-right" />
       {!isInRoom ? (
         <div className="w-full max-w-md bg-gray-800 p-8 rounded-lg shadow-lg">
           <h1 className="text-2xl font-bold mb-8 text-center">Welcome to Chat Room</h1>
